@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Briefcase, 
@@ -208,32 +209,48 @@ const App: React.FC = () => {
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Check initial auth state
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      setUser(user);
-      setAuthChecked(true);
-      
-      // Only show onboarding if user is logged in
-      if (user) {
-        const hasSeenOnboarding = localStorage.getItem('appboss_onboarding_seen');
-        if (!hasSeenOnboarding) {
-          setTimeout(() => setShowOnboarding(true), 1000);
+    let mounted = true;
+
+    const initAuth = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        if (mounted) {
+          setUser(user);
+          if (user) {
+             const hasSeenOnboarding = localStorage.getItem('appboss_onboarding_seen');
+             if (!hasSeenOnboarding) {
+               setTimeout(() => setShowOnboarding(true), 1000);
+             }
+          }
+        }
+      } catch (error) {
+        console.error("Auth initialization failed:", error);
+      } finally {
+        // IMPORTANT: Always set authChecked to true to unlock the UI
+        if (mounted) setAuthChecked(true);
+      }
+    };
+
+    initAuth();
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (mounted) {
+        setUser(session?.user ?? null);
+        if (session?.user) {
+            const hasSeenOnboarding = localStorage.getItem('appboss_onboarding_seen');
+            if (!hasSeenOnboarding) {
+              setTimeout(() => setShowOnboarding(true), 1000);
+            }
         }
       }
     });
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-      if (session?.user) {
-          const hasSeenOnboarding = localStorage.getItem('appboss_onboarding_seen');
-          if (!hasSeenOnboarding) {
-            setTimeout(() => setShowOnboarding(true), 1000);
-          }
-      }
-    });
-
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   // Update simulated price when plan changes and scroll to top
@@ -1444,9 +1461,14 @@ Gerado via AppBoss | Império No-Code
       </nav>
 
       <main className="pt-12">
-        {isLoading ? (
+        {!authChecked ? (
+          <div className="min-h-[calc(100vh-80px)] flex flex-col items-center justify-center">
+            <Loader2 size={40} className="text-brand-primary animate-spin mb-4" />
+            <p className="text-slate-500 font-mono text-sm">Verificando credenciais...</p>
+          </div>
+        ) : isLoading ? (
           renderLoading()
-        ) : !user && authChecked ? (
+        ) : !user ? (
           renderLandingPage()
         ) : (
           <>

@@ -10,7 +10,12 @@ const supabaseUrl = 'https://ehgfhlgrficulnijmmmc.supabase.co';
 // A chave 'anon public' fornecida
 const supabaseKey = 'sb_publishable_nSELKjYPdOcHWUv_mAG5sw_qO07Lcn1'; 
 
-export const supabase = createClient(supabaseUrl, supabaseKey);
+export const supabase = createClient(supabaseUrl, supabaseKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+  }
+});
 
 // --- AUTH SERVICES ---
 
