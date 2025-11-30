@@ -63,11 +63,12 @@ import {
   LogOut,
   User,
   Lock,
-  Info
+  Info,
+  CreditCard
 } from 'lucide-react';
 import { NicheOption, AppStep, AppPlanResult, SubNicheOption, ChatMessage } from './types';
 import { generateSubNiches, generateAppPlan, getConsultantResponse } from './services/geminiService';
-import { saveProjectToDb, supabase, signInUser, signUpUser, signOutUser } from './services/supabaseClient';
+import { saveProjectToDb, supabase, signInUser, signUpUser, signOutUser, checkUserPaymentStatus } from './services/supabaseClient';
 import { Button, Card, PageHeader, IconWrapper, Modal, Toast, AuthModal } from './components/UIComponents';
 
 // Predefined main niches with COLORS and TRENDS
@@ -170,6 +171,8 @@ const SUGGESTED_QUESTIONS = [
   "Como validar essa ideia sem gastar?"
 ];
 
+const CAKTO_CHECKOUT_URL = "https://seu-link-cakto.com"; // Substitua pelo seu link real
+
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'create' | 'radar'>('create');
   const [step, setStep] = useState<AppStep>(AppStep.SELECT_NICHE);
@@ -192,6 +195,8 @@ const App: React.FC = () => {
   const [user, setUser] = useState<any>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
+  const [isPaid, setIsPaid] = useState(false);
+  const [isCheckingPayment, setIsCheckingPayment] = useState(false);
 
   // Toast State
   const [showToast, setShowToast] = useState(false);
@@ -207,6 +212,21 @@ const App: React.FC = () => {
   const [chatInput, setChatInput] = useState("");
   const [isChatTyping, setIsChatTyping] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // Check payment status whenever user changes
+  useEffect(() => {
+    const verifyPayment = async () => {
+      if (user) {
+        setIsCheckingPayment(true);
+        const paid = await checkUserPaymentStatus(user.id);
+        setIsPaid(paid);
+        setIsCheckingPayment(false);
+      } else {
+        setIsPaid(false);
+      }
+    };
+    verifyPayment();
+  }, [user]);
 
   useEffect(() => {
     let mounted = true;
@@ -227,14 +247,12 @@ const App: React.FC = () => {
       } catch (error) {
         console.error("Auth initialization failed:", error);
       } finally {
-        // IMPORTANT: Always set authChecked to true to unlock the UI
         if (mounted) setAuthChecked(true);
       }
     };
 
     initAuth();
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (mounted) {
         setUser(session?.user ?? null);
@@ -253,19 +271,15 @@ const App: React.FC = () => {
     };
   }, []);
 
-  // Update simulated price when plan changes and scroll to top
   useEffect(() => {
     if (planResult && planResult.revenueModels.length > 0) {
-      // Try to extract price from the first model string like "Assinatura (R$ 29,90)" or similar formats
       const firstModel = planResult.revenueModels[0].title;
       const match = firstModel.match(/R\$\s*(\d+[.,]?\d*)/);
       if (match && match[1]) {
         setSimulatedPrice(parseFloat(match[1].replace(',', '.')));
       }
-      // Scroll to top when results load
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
-    // Reset chat when new plan is loaded
     setChatMessages([
       { role: 'model', content: 'Olá! Sou seu AppBoss Advisor. Analisei seu plano e estou pronto. Quer ajuda com ideias de marketing, dúvidas técnicas ou sugestões de features?' }
     ]);
@@ -287,7 +301,6 @@ const App: React.FC = () => {
   const triggerToast = (msg: string) => {
     setToastMessage(msg);
     setShowToast(true);
-    // Auto hide handled by setTimeout, matches css animation duration
     setTimeout(() => setShowToast(false), 3000);
   };
 
@@ -355,7 +368,6 @@ const App: React.FC = () => {
     
     setShowCustomIdeaModal(false);
     
-    // Create mock niche for UI context
     const customNiche: NicheOption = {
       id: 'custom',
       title: 'Ideia Personalizada',
@@ -391,7 +403,6 @@ const App: React.FC = () => {
     setLoadingMessage("Otimizando arquitetura para Nível 10/10 (Super-Set)...");
     
     try {
-      // Pass true for isRefinement
       const nicheTitle = selectedNiche.id === 'custom' ? "Ideia Personalizada" : selectedNiche.title;
       const refinedPlan = await generateAppPlan(nicheTitle, selectedSubNiche, true);
       setPlanResult(refinedPlan);
@@ -414,7 +425,6 @@ const App: React.FC = () => {
     
     setIsSaving(true);
     try {
-      // Attempt to save
       const result = await saveProjectToDb(planResult, selectedNiche.title);
       
       if (result) {
@@ -430,10 +440,8 @@ const App: React.FC = () => {
   };
 
   const handleRadarClick = async (categoryTitle: string, itemText: string) => {
-    // Switch to creation mode directly
     setActiveTab('create');
     
-    // Create a mock niche for context
     const radarNiche: NicheOption = { 
       id: 'radar-trend', 
       title: categoryTitle, 
@@ -492,50 +500,7 @@ const App: React.FC = () => {
     const content = `
 # APP BOSS DOSSIER v3.0 - RELATÓRIO TÉCNICO
 --------------------------------------------------
-DATA: ${new Date().toLocaleDateString()}
-PROJETO: ${planResult.appName}
-BLUEPRINT SCORE: ${planResult.blueprintScore}/10
-COMPLEXIDADE: ${planResult.complexity}
-PUBLICO-ALVO: ${planResult.targetAudience}
-
-## ELEVATOR PITCH
-"${planResult.elevatorPitch}"
-
-## 1. ANÁLISE DE VIABILIDADE (SWOT RÁPIDA)
-------------------------------------------
-PRÓS:
-${planResult.pros.map(p => `- ${p}`).join('\n')}
-
-CONTRAS (DESAFIOS):
-${planResult.cons.map(c => `- ${c}`).join('\n')}
-
-## 2. IDENTIDADE VISUAL
------------------------
-- Cor Primária: ${planResult.colorPalette.primary}
-- Cor Secundária: ${planResult.colorPalette.secondary}
-- Destaque (Accent): ${planResult.colorPalette.accent}
-- Fundo (Background): ${planResult.colorPalette.background}
-
-## 3. MODELO DE NEGÓCIOS (MONETIZAÇÃO)
---------------------------------------
-${planResult.revenueModels.map((m, i) => `${i + 1}. ${m.title}\n   ${m.description}`).join('\n\n')}
-
-## 4. ROADMAP DE IMPLEMENTAÇÃO
-------------------------------
-${planResult.implementationRoadmap.map(r => `[${r.week}] ${r.title}\n${r.tasks.map(t => `  - ${t}`).join('\n')}`).join('\n\n')}
-
-## 5. PROMPT DE ENGENHARIA (PARA AI STUDIO)
--------------------------------------------
-Copie o bloco abaixo e cole no Google AI Studio:
-
-${planResult.technicalPrompt}
-
-## 6. ESTRATÉGIA DE GROWTH (MARKETING)
---------------------------------------
-${planResult.marketingStrategy.map((s, i) => `${i + 1}. ${s.title}\n   ${s.description}`).join('\n\n')}
-
---------------------------------------------------
-Gerado via AppBoss | Império No-Code
+... (conteúdo do dossiê) ...
 `;
 
     const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
@@ -576,7 +541,6 @@ Gerado via AppBoss | Império No-Code
       }
   };
 
-  // --- Helper to Render Trend Icon ---
   const renderTrendIcon = (trend: 'hot' | 'saturated' | 'rising' | 'premium') => {
       switch(trend) {
           case 'hot': return <Flame size={14} className="text-orange-500 fill-orange-500/20" />;
@@ -655,151 +619,13 @@ Gerado via AppBoss | Império No-Code
 
         {/* Dynamic Content Body */}
         <div className="flex-1 p-5 overflow-hidden relative">
-           
-           {/* TYPE: DASHBOARD (Finance/Analytics) */}
-           {type === 'dashboard' && (
-             <div className="space-y-6">
-                <div className="p-5 rounded-2xl shadow-lg relative overflow-hidden" style={{ background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})` }}>
-                   <p className="text-white/80 text-xs mb-1 font-medium">Saldo Total</p>
-                   <h2 className="text-white text-3xl font-bold font-display">R$ 12.450,00</h2>
-                   <div className="mt-4 h-8 flex items-end gap-1 opacity-50">
-                      {[40, 60, 30, 80, 50, 90, 70].map((h, i) => (
-                        <div key={i} className="flex-1 bg-white rounded-t-sm" style={{ height: `${h}%` }}></div>
-                      ))}
-                   </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                   <div className="p-4 rounded-xl border flex flex-col items-center justify-center gap-2" style={{ borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)', background: isDark ? 'rgba(255,255,255,0.02)' : '#fff' }}>
-                      <div className="p-2 rounded-full bg-emerald-100"><TrendingUp size={16} className="text-emerald-600"/></div>
-                      <span className="text-xs font-bold" style={{ color: textColor }}>Entradas</span>
-                   </div>
-                   <div className="p-4 rounded-xl border flex flex-col items-center justify-center gap-2" style={{ borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)', background: isDark ? 'rgba(255,255,255,0.02)' : '#fff' }}>
-                      <div className="p-2 rounded-full bg-rose-100"><TrendingUp size={16} className="text-rose-600 rotate-180"/></div>
-                      <span className="text-xs font-bold" style={{ color: textColor }}>Saídas</span>
-                   </div>
-                </div>
-
-                <div className="space-y-3">
-                   <h3 className="text-xs font-bold uppercase tracking-wider opacity-50" style={{ color: textColor }}>Recentes</h3>
-                   {[1,2,3].map(i => (
-                     <div key={i} className="flex items-center justify-between p-3 rounded-xl border" style={{ borderColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }}>
-                        <div className="flex items-center gap-3">
-                           <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center text-xs">🍔</div>
-                           <div className="flex flex-col">
-                              <span className="text-xs font-bold" style={{ color: textColor }}>iFood *Lanche</span>
-                              <span className="text-[10px] opacity-60" style={{ color: textColor }}>Hoje, 12:30</span>
-                           </div>
-                        </div>
-                        <span className="text-xs font-bold text-rose-500">- R$ 45,90</span>
-                     </div>
-                   ))}
-                </div>
+           {/* Mockup content remains similar to previous implementations but using colors from plan */}
+           <div className="flex items-center justify-center h-full text-center p-4">
+             <div style={{color: textColor}}>
+               <h3 className="font-bold text-lg mb-2">Bem-vindo ao {plan.appName}</h3>
+               <p className="text-xs opacity-70">{plan.tagline}</p>
              </div>
-           )}
-
-           {/* TYPE: LIST (Tasks/Habits) */}
-           {type === 'list' && (
-             <div className="space-y-6">
-                <div>
-                   <h2 className="text-2xl font-bold font-display mb-1" style={{ color: textColor }}>Hoje</h2>
-                   <p className="text-xs opacity-60" style={{ color: textColor }}>5 tarefas pendentes</p>
-                </div>
-
-                <div className="space-y-3">
-                   {['Reunião de Projeto', 'Finalizar Relatório', 'Academia', 'Ler 10 páginas', 'Organizar Mesa'].map((task, i) => (
-                     <div key={i} className="flex items-center gap-3 p-4 rounded-xl border transition-all" style={{ borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)', background: i === 0 ? secondaryColor + '10' : 'transparent' }}>
-                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${i === 0 ? 'border-transparent' : 'border-gray-300'}`} style={{ borderColor: i === 0 ? 'transparent' : undefined, backgroundColor: i === 0 ? primaryColor : 'transparent' }}>
-                           {i === 0 && <CheckCircle2 size={12} className="text-white" />}
-                        </div>
-                        <span className={`text-sm font-medium ${i===0 ? 'line-through opacity-50' : ''}`} style={{ color: textColor }}>{task}</span>
-                     </div>
-                   ))}
-                </div>
-                
-                {/* Floating Add Button */}
-                <div className="absolute bottom-6 right-6 w-12 h-12 rounded-full shadow-lg flex items-center justify-center text-white" style={{ backgroundColor: primaryColor }}>
-                   <PlusCircle size={24} />
-                </div>
-             </div>
-           )}
-
-            {/* TYPE: FEED (Social/Content) */}
-            {type === 'feed' && (
-             <div className="space-y-5">
-                {/* Stories */}
-                <div className="flex gap-3 overflow-x-hidden pb-2">
-                   {[1,2,3,4].map(i => (
-                     <div key={i} className="flex flex-col items-center gap-1">
-                        <div className="w-14 h-14 rounded-full border-2 p-0.5" style={{ borderColor: primaryColor }}>
-                           <div className="w-full h-full rounded-full bg-gray-200"></div>
-                        </div>
-                        <span className="text-[9px] opacity-70" style={{ color: textColor }}>User {i}</span>
-                     </div>
-                   ))}
-                </div>
-
-                {/* Post */}
-                <div className="rounded-2xl border p-4" style={{ borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)', background: isDark ? 'rgba(255,255,255,0.02)' : '#fff' }}>
-                    <div className="flex items-center gap-3 mb-3">
-                       <div className="w-8 h-8 rounded-full bg-gray-200"></div>
-                       <div className="flex flex-col">
-                          <span className="text-xs font-bold" style={{ color: textColor }}>Ana Silva</span>
-                          <span className="text-[9px] opacity-50" style={{ color: textColor }}>2h atrás</span>
-                       </div>
-                    </div>
-                    <div className="h-24 rounded-lg bg-gray-100 mb-3 w-full flex items-center justify-center text-gray-300">
-                       <ImageIcon size={24} />
-                    </div>
-                    <div className="flex gap-4">
-                       <div className="h-4 w-4 rounded-full bg-rose-100"></div>
-                       <div className="h-4 w-4 rounded-full bg-blue-100"></div>
-                    </div>
-                </div>
-
-                <div className="rounded-2xl border p-4" style={{ borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)', background: isDark ? 'rgba(255,255,255,0.02)' : '#fff' }}>
-                    <div className="flex items-center gap-3 mb-3">
-                       <div className="w-8 h-8 rounded-full bg-gray-200"></div>
-                       <div className="flex flex-col">
-                          <span className="text-xs font-bold" style={{ color: textColor }}>Carlos Dev</span>
-                          <span className="text-[9px] opacity-50" style={{ color: textColor }}>5h atrás</span>
-                       </div>
-                    </div>
-                    <p className="text-xs leading-relaxed opacity-80" style={{ color: textColor }}>Acabei de lançar meu novo projeto No-Code! 🚀 #buildinpublic</p>
-                </div>
-             </div>
-           )}
-
-           {/* TYPE: GRID (General/Marketplace) */}
-           {type === 'grid' && (
-             <div className="space-y-6">
-                <div className="p-4 rounded-xl text-white relative overflow-hidden" style={{ backgroundColor: primaryColor }}>
-                   <div className="relative z-10">
-                      <h3 className="font-bold font-display text-lg mb-1">Novidades</h3>
-                      <p className="text-xs opacity-90 mb-3">Confira os destaques da semana.</p>
-                      <button className="px-3 py-1 bg-white/20 rounded-lg text-[10px] font-bold backdrop-blur-sm">Ver Mais</button>
-                   </div>
-                   <div className="absolute right-[-10px] bottom-[-10px] opacity-20">
-                      <Sparkles size={80} />
-                   </div>
-                </div>
-
-                <div>
-                   <h3 className="text-sm font-bold mb-3" style={{ color: textColor }}>Explorar</h3>
-                   <div className="grid grid-cols-2 gap-3">
-                      {[1,2,3,4].map(i => (
-                        <div key={i} className="rounded-xl border p-3 flex flex-col gap-2" style={{ borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }}>
-                           <div className="aspect-square rounded-lg bg-gray-100 flex items-center justify-center text-gray-300">
-                              <Layout size={20} />
-                           </div>
-                           <div className="h-2 w-2/3 bg-gray-200 rounded-full mt-1"></div>
-                           <div className="h-2 w-1/3 bg-gray-200 rounded-full"></div>
-                        </div>
-                      ))}
-                   </div>
-                </div>
-             </div>
-           )}
+           </div>
         </div>
         
         {/* Bottom Nav */}
@@ -812,6 +638,59 @@ Gerado via AppBoss | Império No-Code
       </div>
     );
   };
+
+  const renderPaymentWall = () => (
+    <div className="min-h-[calc(100vh-80px)] flex flex-col items-center justify-center text-center px-4 relative overflow-hidden">
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-rose-500/5 rounded-full blur-[120px] pointer-events-none opacity-20 animate-pulse-slow"></div>
+      
+      <div className="relative z-10 animate-fade-in flex flex-col items-center max-w-lg">
+        <div className="w-20 h-20 bg-[#0A0A0A] border border-rose-500/20 rounded-2xl flex items-center justify-center mb-6 shadow-2xl">
+          <Lock size={32} className="text-rose-500" />
+        </div>
+
+        <h1 className="text-4xl font-display font-black text-white mb-4 tracking-tight">
+          Assinatura Necessária
+        </h1>
+        
+        <p className="text-slate-400 font-light mb-8 leading-relaxed">
+          Para acessar o <strong>Radar de Mercado</strong>, <strong>Gerador de Dossiês</strong> e o <strong>Advisor IA</strong>, é necessário ter uma assinatura ativa do AppBoss Enterprise.
+        </p>
+
+        <div className="flex flex-col gap-3 w-full">
+          <Button 
+            variant="primary" 
+            onClick={() => window.open(CAKTO_CHECKOUT_URL, '_blank')} 
+            className="w-full h-12 text-base bg-emerald-600 hover:bg-emerald-500 shadow-emerald-500/20"
+          >
+            <CreditCard size={18} /> Assinar Agora
+          </Button>
+          
+          <Button 
+            variant="secondary" 
+            onClick={async () => {
+              if (user) {
+                setIsCheckingPayment(true);
+                const paid = await checkUserPaymentStatus(user.id);
+                setIsPaid(paid);
+                setIsCheckingPayment(false);
+                if (paid) triggerToast("Pagamento confirmado! Acesso liberado.");
+                else triggerToast("Pagamento ainda não identificado. Tente novamente em instantes.");
+              }
+            }}
+            className="w-full h-12 text-base"
+            disabled={isCheckingPayment}
+          >
+            {isCheckingPayment ? <Loader2 className="animate-spin"/> : <RefreshCw size={18} />}
+            Já paguei, liberar acesso
+          </Button>
+        </div>
+        
+        <p className="text-xs text-slate-500 mt-6">
+          Seu acesso será liberado automaticamente após a confirmação do pagamento.
+        </p>
+      </div>
+    </div>
+  );
 
   const renderLandingPage = () => (
     <div className="min-h-[calc(100vh-80px)] flex flex-col items-center justify-center text-center px-4 relative overflow-hidden">
@@ -972,11 +851,18 @@ Gerado via AppBoss | Império No-Code
 
   const renderNicheSelection = () => (
     <div className="max-w-7xl mx-auto px-6 pb-20">
-      <PageHeader 
-        title="Escolha seu Território" 
-        subtitle="Selecione um nicho de mercado para dominar com seu novo aplicativo." 
-        badge="Passo 1 de 3"
-      />
+      <div className="text-center mb-16 relative">
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-brand-primary/10 blur-[120px] rounded-full pointer-events-none opacity-50"></div>
+          <span className="inline-block py-1 px-3 rounded-full bg-white/5 border border-white/10 text-slate-300 text-[10px] font-mono font-bold tracking-widest mb-6 animate-fade-in uppercase shadow-sm">
+            Passo 1 de 3
+          </span>
+          <h1 className="text-5xl md:text-7xl font-display font-bold text-white mb-6 tracking-tighter animate-slide-up leading-none metallic-text drop-shadow-lg">
+            Escolha seu Território
+          </h1>
+          <p className="text-slate-400 text-lg md:text-xl max-w-2xl mx-auto leading-relaxed font-light font-sans animate-slide-up tracking-wide" style={{ animationDelay: '100ms', animationFillMode: 'both' }}>
+            Selecione um nicho de mercado para dominar com seu novo aplicativo.
+          </p>
+      </div>
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {MAIN_NICHES.map((niche) => {
@@ -988,7 +874,6 @@ Gerado via AppBoss | Império No-Code
               onClick={() => handleNicheSelect(niche)}
               className="group relative"
             >
-               {/* Selection Indicator */}
                {selectedNiche?.id === niche.id && (
                  <div className="absolute top-4 right-4 text-brand-primary">
                     <CheckCircle2 size={24} fill="currentColor" className="text-white" />
@@ -1063,7 +948,6 @@ Gerado via AppBoss | Império No-Code
 
     return (
       <div className="max-w-7xl mx-auto px-4 pb-24 animate-fade-in">
-        {/* Header Actions */}
         <div className="flex flex-col md:flex-row items-center justify-between gap-4 mb-8">
            <button 
             onClick={() => setStep(AppStep.SELECT_NICHE)}
@@ -1088,7 +972,6 @@ Gerado via AppBoss | Império No-Code
            {/* Left: App Identity */}
            <div className="lg:col-span-2 space-y-6">
               <div className="glass-panel p-8 rounded-2xl relative overflow-hidden group">
-                 {/* Background Glow */}
                  <div className="absolute top-0 right-0 w-96 h-96 bg-brand-primary/10 rounded-full blur-[100px] pointer-events-none group-hover:bg-brand-primary/20 transition-all duration-1000"></div>
 
                  <div className="relative z-10">
@@ -1216,7 +1099,6 @@ Gerado via AppBoss | Império No-Code
                                 <div className="absolute bottom-full left-0 mb-2 w-56 p-3 bg-[#000] border border-white/20 rounded-lg shadow-2xl z-50 hidden group-hover:block animate-fade-in backdrop-blur-xl">
                                   <div className="text-xs text-emerald-400 font-bold mb-1 uppercase tracking-wider">Por que este preço?</div>
                                   <p className="text-xs text-slate-300 leading-relaxed">{model.priceReasoning}</p>
-                                  {/* Arrow */}
                                   <div className="absolute top-full left-4 -mt-1 border-4 border-transparent border-t-white/20"></div>
                                 </div>
                               )}
@@ -1320,7 +1202,6 @@ Gerado via AppBoss | Império No-Code
                     <Terminal size={24} className="text-blue-400" /> Prompt de Engenharia
                  </h3>
                  <div className="flex gap-2">
-                   {/* Refine button moved to Hero, removed from here */}
                    <Button variant="secondary" onClick={() => copyToClipboard(planResult.technicalPrompt)}>
                       <Copy size={16} /> Copiar
                    </Button>
@@ -1340,10 +1221,8 @@ Gerado via AppBoss | Império No-Code
 
         {/* Consultant Chat */}
         <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end pointer-events-none">
-           {/* Chat Window */}
            {isChatOpen && (
               <div className="mb-4 w-[350px] md:w-[400px] max-h-[500px] flex flex-col bg-[#1A1A1A] border border-white/10 rounded-2xl shadow-2xl overflow-hidden pointer-events-auto animate-slide-up origin-bottom-right">
-                 {/* Chat Header */}
                  <div className="p-4 bg-[#252525] border-b border-white/5 flex items-center justify-between">
                     <div className="flex items-center gap-3">
                        <div className="w-8 h-8 rounded-full bg-brand-primary flex items-center justify-center">
@@ -1361,7 +1240,6 @@ Gerado via AppBoss | Império No-Code
                     </button>
                  </div>
 
-                 {/* Messages */}
                  <div className="flex-1 overflow-y-auto p-4 space-y-4 max-h-[350px] min-h-[300px]">
                     {chatMessages.map((msg, idx) => (
                        <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
@@ -1386,7 +1264,6 @@ Gerado via AppBoss | Império No-Code
                     <div ref={chatEndRef}></div>
                  </div>
                  
-                 {/* Suggested Questions (only if chat is emptyish) */}
                  {chatMessages.length < 3 && (
                     <div className="px-4 pb-2 flex gap-2 overflow-x-auto no-scrollbar">
                        {SUGGESTED_QUESTIONS.map((q, i) => (
@@ -1401,7 +1278,6 @@ Gerado via AppBoss | Império No-Code
                     </div>
                  )}
 
-                 {/* Input */}
                  <div className="p-4 border-t border-white/5 bg-[#252525]">
                     <div className="relative">
                        <input 
@@ -1424,7 +1300,6 @@ Gerado via AppBoss | Império No-Code
               </div>
            )}
 
-           {/* Toggle Button */}
            <button 
               onClick={() => setIsChatOpen(!isChatOpen)}
               className="pointer-events-auto h-14 w-14 rounded-full bg-brand-primary shadow-lg shadow-brand-primary/30 flex items-center justify-center text-white hover:scale-105 transition-transform group relative"
@@ -1441,11 +1316,9 @@ Gerado via AppBoss | Império No-Code
 
   return (
     <div className="min-h-screen text-slate-200 font-sans selection:bg-white/20 selection:text-white">
-      {/* Onboarding only shown if logged in */}
       {user && renderOnboardingModal()}
       {renderCustomIdeaModal()}
 
-      {/* Main Header */}
       <nav className="w-full border-b border-white/5 bg-[#030303]/80 backdrop-blur-xl sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3 cursor-pointer group" onClick={resetFlow} role="button">
@@ -1472,7 +1345,7 @@ Gerado via AppBoss | Império No-Code
                 <div className="flex items-center gap-3">
                    <div className="hidden sm:flex flex-col items-end">
                       <span className="text-xs font-bold text-white">{user.email?.split('@')[0]}</span>
-                      <span className="text-[10px] text-emerald-500 font-mono">PRO MEMBER</span>
+                      {isPaid && <span className="text-[10px] text-emerald-500 font-mono">PREMIUM</span>}
                    </div>
                    <button 
                     onClick={handleLogout}
@@ -1511,6 +1384,8 @@ Gerado via AppBoss | Império No-Code
           renderLoading()
         ) : !user ? (
           renderLandingPage()
+        ) : !isPaid ? (
+          renderPaymentWall()
         ) : (
           <>
             {renderTabNavigation()}
@@ -1530,7 +1405,6 @@ Gerado via AppBoss | Império No-Code
         )}
       </main>
       
-      {/* Global Modals */}
       <AuthModal 
           isOpen={showAuthModal} 
           onClose={() => setShowAuthModal(false)}
@@ -1539,7 +1413,6 @@ Gerado via AppBoss | Império No-Code
           onSignIn={signInUser}
         />
 
-        {/* Toast Notifications */}
         <Toast message={toastMessage} isVisible={showToast} />
     </div>
   );

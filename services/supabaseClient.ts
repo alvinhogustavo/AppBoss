@@ -46,6 +46,26 @@ export const getCurrentUser = async () => {
   return user;
 };
 
+// Verifica se o usuário tem a flag 'is_paid' verdadeira na tabela profiles
+export const checkUserPaymentStatus = async (userId: string) => {
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('is_paid')
+      .eq('id', userId)
+      .single();
+
+    if (error) {
+      console.error('Erro ao verificar pagamento:', error);
+      return false; // Por segurança, assume não pago se der erro
+    }
+
+    return data?.is_paid || false;
+  } catch (e) {
+    return false;
+  }
+};
+
 // --- DB SERVICES ---
 
 export const saveProjectToDb = async (plan: any, niche: string) => {
