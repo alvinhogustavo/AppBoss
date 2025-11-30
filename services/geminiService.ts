@@ -3,7 +3,7 @@ import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { AppPlanResult, SubNicheOption, ChatMessage } from "../types";
 
 // Initialize Gemini Client
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
 
 const modelId = "gemini-2.5-flash";
 
