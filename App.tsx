@@ -256,7 +256,7 @@ const App: React.FC = () => {
   // Update simulated price when plan changes and scroll to top
   useEffect(() => {
     if (planResult && planResult.revenueModels.length > 0) {
-      // Try to extract price from the first model string like "Assinatura (R$ 29,90)"
+      // Try to extract price from the first model string like "Assinatura (R$ 29,90)" or similar formats
       const firstModel = planResult.revenueModels[0].title;
       const match = firstModel.match(/R\$\s*(\d+[.,]?\d*)/);
       if (match && match[1]) {
@@ -1096,7 +1096,12 @@ Gerado via AppBoss | Império No-Code
                        <span className="px-3 py-1 rounded-full bg-white/10 border border-white/10 text-xs font-bold text-white uppercase tracking-wider">
                          App Blueprint Generated
                        </span>
-                       {renderBlueprintScore(planResult.blueprintScore)}
+                       <div className="flex flex-col items-center gap-2">
+                         {renderBlueprintScore(planResult.blueprintScore)}
+                         <Button variant="accent" onClick={handleRefinePlan} className="h-8 text-xs px-3 py-0">
+                           <Sparkles size={12} className="mr-1" /> Turbinar Score
+                         </Button>
+                       </div>
                     </div>
 
                     <h1 className="text-4xl md:text-6xl font-display font-black text-white mb-2 tracking-tight">
@@ -1117,22 +1122,22 @@ Gerado via AppBoss | Império No-Code
 
               {/* Stats Grid */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                 <Card noPadding className="p-4 flex flex-col items-center justify-center gap-2 text-center">
+                 <Card noPadding className="p-4 flex flex-col items-center justify-center gap-2 text-center min-h-[120px]">
                     <Target size={24} className="text-blue-400" />
                     <span className="text-xs text-slate-500 font-bold uppercase">Complexidade</span>
                     <span className="font-bold text-white">{planResult.complexity}</span>
                  </Card>
-                 <Card noPadding className="p-4 flex flex-col items-center justify-center gap-2 text-center">
+                 <Card noPadding className="p-4 flex flex-col items-center justify-center gap-2 text-center min-h-[120px]">
                     <Palette size={24} className="text-purple-400" />
-                    <span className="text-xs text-slate-500 font-bold uppercase">Stack</span>
+                    <span className="text-xs text-slate-500 font-bold uppercase">Tecnologia</span>
                     <span className="font-bold text-white text-xs">React + Tailwind</span>
                  </Card>
-                 <Card noPadding className="p-4 flex flex-col items-center justify-center gap-2 text-center">
+                 <Card noPadding className="p-4 flex flex-col items-center justify-center gap-2 text-center min-h-[120px]">
                     <Users size={24} className="text-rose-400" />
-                    <span className="text-xs text-slate-500 font-bold uppercase">Público</span>
-                    <span className="font-bold text-white text-xs truncate w-full">{planResult.targetAudience.split(' ')[0]}...</span>
+                    <span className="text-xs text-slate-500 font-bold uppercase">Público-Alvo</span>
+                    <span className="font-bold text-white text-xs leading-tight line-clamp-3" title={planResult.targetAudience}>{planResult.targetAudience}</span>
                  </Card>
-                 <Card noPadding className="p-4 flex flex-col items-center justify-center gap-2 text-center bg-emerald-500/10 border-emerald-500/20">
+                 <Card noPadding className="p-4 flex flex-col items-center justify-center gap-2 text-center bg-emerald-500/10 border-emerald-500/20 min-h-[120px]">
                     <DollarSign size={24} className="text-emerald-400" />
                     <span className="text-xs text-emerald-500/70 font-bold uppercase">Potencial</span>
                     <span className="font-bold text-emerald-400">Alto</span>
@@ -1226,6 +1231,7 @@ Gerado via AppBoss | Império No-Code
                     <div className="p-4 rounded-xl bg-emerald-900/10 border border-emerald-500/20">
                        <div className="flex justify-between items-center mb-4">
                           <h4 className="font-bold text-emerald-400 flex items-center gap-2"><Calculator size={16} /> Simulador de Ganhos</h4>
+                          <span className="text-xs text-slate-400 bg-black/20 px-2 py-1 rounded">Base: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(simulatedPrice)}</span>
                        </div>
                        <div className="space-y-4">
                           <div className="flex justify-between text-sm">
@@ -1241,11 +1247,19 @@ Gerado via AppBoss | Império No-Code
                             onChange={(e) => setSimulatedUsers(parseInt(e.target.value))}
                             className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-emerald-500"
                           />
-                          <div className="flex justify-between items-center pt-2">
-                             <span className="text-sm text-slate-400">Faturamento Mensal Est.:</span>
-                             <span className="text-xl font-bold text-emerald-400">
-                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(simulatedUsers * simulatedPrice)}
-                             </span>
+                          <div className="grid grid-cols-2 gap-4 pt-4 border-t border-emerald-500/20 mt-4">
+                              <div>
+                                  <span className="text-xs text-slate-400 block mb-1">Faturamento Mensal</span>
+                                  <span className="text-lg font-bold text-emerald-400">
+                                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(simulatedUsers * simulatedPrice)}
+                                  </span>
+                              </div>
+                              <div>
+                                  <span className="text-xs text-slate-400 block mb-1">Faturamento Anual</span>
+                                  <span className="text-lg font-bold text-emerald-300">
+                                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(simulatedUsers * simulatedPrice * 12)}
+                                  </span>
+                              </div>
                           </div>
                        </div>
                     </div>
@@ -1306,9 +1320,7 @@ Gerado via AppBoss | Império No-Code
                     <Terminal size={24} className="text-blue-400" /> Prompt de Engenharia
                  </h3>
                  <div className="flex gap-2">
-                   <Button variant="ghost" onClick={handleRefinePlan} title="Melhorar Prompt com IA">
-                      <Sparkles size={16} /> Refinar
-                   </Button>
+                   {/* Refine button moved to Hero, removed from here */}
                    <Button variant="secondary" onClick={() => copyToClipboard(planResult.technicalPrompt)}>
                       <Copy size={16} /> Copiar
                    </Button>
