@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Briefcase, 
@@ -59,7 +58,7 @@ import {
   Image as ImageIcon,
   UserCircle2,
   Cloud,
-  CloudUpload,
+  Upload,
   LogOut,
   User,
   Lock,
@@ -1029,7 +1028,7 @@ Gerado via AppBoss | Império No-Code
           
           <div className="flex items-center gap-3">
              <Button variant="secondary" onClick={handleSaveToSupabase} disabled={isSaving}>
-               {isSaving ? <Loader2 size={16} className="animate-spin" /> : <CloudUpload size={16} />}
+               {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
                <span className="hidden sm:inline">Salvar Projeto</span>
              </Button>
              <Button variant="primary" onClick={downloadDossier}>
