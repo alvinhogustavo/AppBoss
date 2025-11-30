@@ -4,16 +4,17 @@ import { createClient } from '@supabase/supabase-js';
 // ------------------------------------------------------------------
 // CONFIGURAÇÃO DO SUPABASE
 // ------------------------------------------------------------------
-// A URL do seu projeto (verifique se termina em .co ou .com no seu painel)
+// A URL do seu projeto
 const supabaseUrl = 'https://ehgfhlgrficulnijmmmc.supabase.co';
 
-// A chave 'anon public' fornecida
-const supabaseKey = 'sb_publishable_nSELKjYPdOcHWUv_mAG5sw_qO07Lcn1'; 
+// A chave 'anon public' correta (JWT)
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVoZ2ZobGdyZmljdWxuaWptbW1jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ1MTYzNTgsImV4cCI6MjA4MDA5MjM1OH0.ePmlWGlcIVcFpxweD2XjfoPRCUeQ0wRV-MvV4A_j5dk'; 
 
 export const supabase = createClient(supabaseUrl, supabaseKey, {
   auth: {
-    persistSession: true,
+    persistSession: true, // Mantém o usuário logado mesmo se fechar a aba
     autoRefreshToken: true,
+    detectSessionInUrl: true
   }
 });
 
