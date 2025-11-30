@@ -315,8 +315,13 @@ const App: React.FC = () => {
       const results = await generateSubNiches(niche.title);
       setSubNiches(results);
       setStep(AppStep.SELECT_SUBNICHE);
-    } catch (error) {
-      alert("Ocorreu um erro ao buscar sub-nichos. Tente novamente.");
+    } catch (error: any) {
+      console.error(error);
+      let errorMsg = "Ocorreu um erro ao buscar sub-nichos.";
+      if (error.message && error.message.includes("API Key")) {
+        errorMsg = "Erro de Configuração: API Key não encontrada na Vercel.";
+      }
+      alert(errorMsg);
     } finally {
       setIsLoading(false);
     }
@@ -333,9 +338,13 @@ const App: React.FC = () => {
       const plan = await generateAppPlan(selectedNiche.title, sub);
       setPlanResult(plan);
       setStep(AppStep.VIEW_RESULT);
-    } catch (error) {
+    } catch (error: any) {
       setStep(AppStep.SELECT_SUBNICHE);
-      alert("Erro ao gerar o plano. Tente novamente.");
+      let errorMsg = "Erro ao gerar o plano. Tente novamente.";
+      if (error.message && error.message.includes("API Key")) {
+        errorMsg = "Erro Crítico: API Key não configurada. Verifique as variáveis de ambiente na Vercel.";
+      }
+      alert(errorMsg);
     } finally {
       setIsLoading(false);
     }
@@ -447,7 +456,7 @@ const App: React.FC = () => {
       setStep(AppStep.VIEW_RESULT);
     } catch (error) {
       setStep(AppStep.SELECT_NICHE);
-      alert("Erro ao gerar plano via Radar.");
+      alert("Erro ao gerar plano via Radar. Verifique a API Key.");
     } finally {
       setIsLoading(false);
     }
@@ -903,17 +912,37 @@ Gerado via AppBoss | Império No-Code
   );
 
   const renderMarketRadar = () => {
-    // Mock data for radar
+    // Specific radar data as requested by user with correct icons and themes
     const radarData = [
-      { category: "Micro-SaaS B2B", icon: Briefcase, color: "text-blue-400", items: ["CRM para WhatsApp", "Gestão de Escalas", "Automação de Notas Fiscais"] },
-      { category: "Creator Economy", icon: Zap, color: "text-purple-400", items: ["Media Kit Generator", "Agendador de Stories", "Paywall de Conteúdo"] },
-      { category: "Saúde & Biohacking", icon: Activity, color: "text-emerald-400", items: ["Rastreador de Jejum", "Meditação Guiada por IA", "Diário de Sono"] },
-      { category: "Educação Tech", icon: BookOpen, color: "text-amber-400", items: ["Flashcards de Programação", "Resumos de Livros Técnicos", "Simulador de Entrevistas"] }
+      { 
+        category: "Top Lucrativos", 
+        icon: Diamond, 
+        color: "text-amber-400", 
+        items: ["SaaS B2B para Clínicas", "Gestão de Frotas Leves", "ERP para Pequenos Varejos"] 
+      },
+      { 
+        category: "Hype do Momento", 
+        icon: Flame, 
+        color: "text-orange-500", 
+        items: ["Geração de Copy com IA", "Avatares para Redes Sociais", "Automação de WhatsApp"] 
+      },
+      { 
+        category: "Tendência de Alta", 
+        icon: Rocket, 
+        color: "text-emerald-500", 
+        items: ["Marketplace de Serviços Agro", "Educação Financeira Jovens", "Telemedicina Veterinária"] 
+      },
+      { 
+        category: "Em Baixa / Saturado", 
+        icon: Snowflake, 
+        color: "text-blue-300", 
+        items: ["To-Do List Simples", "App de Receitas Genérico", "Contador de Passos Básico"] 
+      }
     ];
 
     return (
       <div className="max-w-6xl mx-auto px-6 pb-20">
-        <PageHeader title="Radar de Oportunidades" subtitle="Tendências quentes detectadas pelo nosso algoritmo de mercado." badge="Market Intelligence" />
+        <PageHeader title="Radar de Oportunidades" subtitle="Análise em tempo real dos nichos mais rentáveis do mês." badge="Market Intelligence" />
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {radarData.map((section, idx) => (

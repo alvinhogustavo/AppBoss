@@ -2,10 +2,45 @@
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { AppPlanResult, SubNicheOption, ChatMessage } from "../types";
 
-// Initialize Gemini Client
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+// Check for API Key explicitly
+const apiKey = process.env.API_KEY || '';
 
-const modelId = "gemini-2.5-flash";
+if (!apiKey) {
+  console.warn("API_KEY is missing. AppBoss will fail to generate content.");
+}
+
+// Initialize Gemini Client
+const ai = new GoogleGenAI({ apiKey: apiKey });
+
+// Default model - we will fallback if this fails
+const PRIMARY_MODEL = "gemini-2.5-flash";
+const FALLBACK_MODEL = "gemini-1.5-flash";
+
+/**
+ * Helper to call generateContent with fallback logic.
+ */
+const generateWithFallback = async (params: any) => {
+  if (!apiKey) {
+    throw new Error("API Key não configurada. Adicione 'API_KEY' nas variáveis de ambiente da Vercel.");
+  }
+
+  try {
+    return await ai.models.generateContent({
+      ...params,
+      model: PRIMARY_MODEL,
+    });
+  } catch (error: any) {
+    console.warn(`Primary model ${PRIMARY_MODEL} failed, trying fallback ${FALLBACK_MODEL}.`, error);
+    // If it's an API Key error, don't retry, just throw
+    if (error.message?.includes("API key")) {
+      throw error;
+    }
+    return await ai.models.generateContent({
+      ...params,
+      model: FALLBACK_MODEL,
+    });
+  }
+};
 
 /**
  * Generates specific sub-niches based on a broad category.
@@ -28,8 +63,7 @@ export const generateSubNiches = async (niche: string): Promise<SubNicheOption[]
   const seed = Math.floor(Math.random() * 100000);
 
   try {
-    const response = await ai.models.generateContent({
-      model: modelId,
+    const response = await generateWithFallback({
       contents: `Atue como um Consultor de Inovação Disruptiva. (Sessão Criativa #${seed}).
       
       O usuário quer criar um aplicativo para resolver problemas do dia a dia no nicho de "${niche}".
@@ -60,17 +94,7 @@ export const generateSubNiches = async (niche: string): Promise<SubNicheOption[]
     return JSON.parse(text) as SubNicheOption[];
   } catch (error) {
     console.error("Error generating sub-niches:", error);
-    // Fallback data updated to objects
-    return [
-      { title: "Agendamento para Autônomos", description: "Apps para manicures, barbeiros e freelas gerenciarem horários." },
-      { title: "Marketplace de Serviços Locais", description: "Conecta prestadores de serviço do bairro com vizinhos." },
-      { title: "Gestão de Despesas Pessoais", description: "Controle financeiro simplificado para quem não gosta de planilhas." },
-      { title: "Controle de Hábitos Diários", description: "Gamificação para beber água, ler e exercitar-se." },
-      { title: "Clube de Assinatura de Conteúdo", description: "Plataforma para vender cursos ou newsletters exclusivas." },
-      { title: "Guia de Turismo Local", description: "Dicas de passeios e lugares escondidos na cidade." },
-      { title: "Gestão de Estoque Simples", description: "Controle de entrada e saída para pequenos vendedores do Instagram." },
-      { title: "Delivery Nichado", description: "Entregas focadas em apenas um tipo de produto (ex: doces, orgânicos)." }
-    ]; 
+    throw error; // Let the UI handle the alert
   }
 };
 
@@ -174,8 +198,7 @@ export const generateAppPlan = async (niche: string, subNiche: string, isRefinem
        `;
     }
 
-    const response = await ai.models.generateContent({
-      model: modelId,
+    const response = await generateWithFallback({
       contents: `Atue como um Especialista Sênior em Produtos Digitais focado no mercado Brasileiro.
       
       ${contextPrompt}
@@ -225,8 +248,10 @@ export const generateAppPlan = async (niche: string, subNiche: string, isRefinem
  */
 export const getConsultantResponse = async (plan: AppPlanResult, history: ChatMessage[], newMessage: string): Promise<string> => {
   try {
+    if (!apiKey) throw new Error("API Key missing");
+    
     const chat = ai.chats.create({
-      model: modelId,
+      model: PRIMARY_MODEL,
       config: {
         systemInstruction: `Você é o "AppBoss Advisor", um Product Manager Sênior do Vale do Silício.
         
